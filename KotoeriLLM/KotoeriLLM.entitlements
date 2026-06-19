@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+      個人利用(ad-hoc署名)の最小権限。入力メソッドはサンドボックス無しで動かす。
+      Mozc サーバへの IPC（Mach port）と、Application Support のモデル読み込みのため、
+      App Sandbox は有効化しない。配布時は Developer ID 署名 + Notarization を別途行う。
+    -->
+    <key>com.apple.security.app-sandbox</key>
+    <false/>
+    <!-- ネットワークは使わない（ローカル完結・プライバシー）。明示的に付与しない。 -->
+</dict>
+</plist>

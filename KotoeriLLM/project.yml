@@ -1,0 +1,87 @@
+# project.yml — XcodeGen 定義
+# 生成: このディレクトリで `xcodegen generate` → KotoeriLLM.xcodeproj が出来る。
+#   (XcodeGen: `brew install xcodegen`)
+#
+# 既定では USE_MOZC=0 / USE_LLAMA=0（スタブ）でそのままビルド・起動できる。
+# Mozc / llama.cpp を組み込むときは、下の SETTINGS のフラグとパスを有効化する。
+
+name: KotoeriLLM
+options:
+  bundleIdPrefix: com.kotoeri.inputmethod
+  deploymentTarget:
+    macOS: "13.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    PRODUCT_NAME: KotoeriLLM
+    MACOSX_DEPLOYMENT_TARGET: "13.0"
+    SWIFT_VERSION: "5.0"
+    CLANG_CXX_LANGUAGE_STANDARD: "c++17"
+    CLANG_CXX_LIBRARY: "libc++"
+    # 個人利用: ad-hoc 署名。配布時は Developer ID + Notarization に差し替え。
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: Manual
+    ENABLE_HARDENED_RUNTIME: NO
+
+targets:
+  KotoeriLLM:
+    type: application
+    platform: macOS
+    # 入力メソッドは .app バンドル。拡張子は app のままで Input Methods に置く。
+    # 手書きの Info.plist / entitlements を使う（XcodeGen に生成させない）。
+    # そのため info:/entitlements: ブロックは置かず、build setting で参照する。
+    sources:
+      - path: Sources
+      - path: Resources
+        buildPhase: resources
+      - path: Info.plist
+        buildPhase: none
+      - path: KotoeriLLM.entitlements
+        buildPhase: none
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.kotoeri.inputmethod.KotoeriLLM
+        INFOPLIST_FILE: Info.plist
+        CODE_SIGN_ENTITLEMENTS: KotoeriLLM.entitlements
+        GENERATE_INFOPLIST_FILE: NO
+        SWIFT_OBJC_BRIDGING_HEADER: Sources/Bridging/KotoeriLLM-Bridging-Header.h
+        SWIFT_OBJC_INTEROP_MODE: objcxx
+        # ── ビルド切替フラグ（スタブ=0）。Mozc/llama 組込時に 1 へ ──
+        GCC_PREPROCESSOR_DEFINITIONS:
+          - "$(inherited)"
+          - "USE_MOZC=0"
+          - "USE_LLAMA=0"
+        # ── サードパーティ include / lib（組込時に実体パスへ） ──
+        # llama.cpp: build_llama.sh が ThirdParty/llama.cpp/{include,lib} を作る。
+        # Mozc:      build_mozc.md の手順で $(MOZC_SRC)/src を通す。
+        HEADER_SEARCH_PATHS:
+          - "$(inherited)"
+          - "$(SRCROOT)/ThirdParty/llama.cpp/include"
+          # - "$(SRCROOT)/ThirdParty/mozc/src"
+        LIBRARY_SEARCH_PATHS:
+          - "$(inherited)"
+          - "$(SRCROOT)/ThirdParty/llama.cpp/lib"
+          # - "$(SRCROOT)/ThirdParty/mozc/lib"
+        # OTHER_LDFLAGS は USE_* を 1 にしたときに有効化する（下記コメント参照）。
+        OTHER_LDFLAGS:
+          - "$(inherited)"
+          # --- USE_LLAMA=1 のとき ---
+          # - "-lllama"
+          # - "-lggml"
+          # - "-lggml-base"
+          # - "-lggml-cpu"
+          # - "-lggml-metal"
+          # - "-lggml-blas"
+          # --- USE_MOZC=1 のとき（実際のlib名はビルド産物に合わせる） ---
+          # - "-lmozc_client"
+          # - "-lmozc_protocol"
+          # - "-lprotobuf"
+    dependencies:
+      - sdk: InputMethodKit.framework
+      - sdk: Carbon.framework
+      - sdk: AppKit.framework
+      # llama.cpp(Metal) 有効時に必要:
+      # - sdk: Metal.framework
+      # - sdk: MetalKit.framework
+      # - sdk: Accelerate.framework

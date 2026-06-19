@@ -1,0 +1,67 @@
+# ============================================================
+#  KotoeriLLM .gitignore
+# ============================================================
+
+# --- LLMモデル（巨大・再配布不可。絶対にコミットしない） -------------
+# モデルは scripts/download_model.sh で各自取得する。
+*.gguf
+*.bin
+*.safetensors
+*.onnx
+KotoeriLLM/**/models/
+**/models/*.gguf
+
+# --- サードパーティのビルド産物（build_llama.sh / build_mozc.md の出力） ---
+.build/
+KotoeriLLM/ThirdParty/
+*.a
+*.dylib
+*.o
+
+# --- XcodeGen が生成するプロジェクト（project.yml がソース・オブ・トゥルース） ---
+# `xcodegen generate` でいつでも再生成できるためコミット不要。
+# チームで共有したい場合はこの2行を消して .xcodeproj をコミットしてもよい。
+KotoeriLLM.xcodeproj/
+*.xcodeproj/
+
+# --- Xcode / DerivedData / ユーザ固有設定 ----------------------------
+DerivedData/
+build/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.moved-aside
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+
+# --- Swift Package Manager ------------------------------------------
+.swiftpm/
+Package.resolved
+
+# --- CocoaPods / Carthage（将来使う場合） ---------------------------
+Pods/
+Carthage/Build/
+
+# --- macOS のゴミファイル -------------------------------------------
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# --- エディタ / IDE -------------------------------------------------
+.idea/
+.vscode/
+*.swp
+*~
+
+# --- ログ・一時ファイル（万一出力された場合の保険） ------------------
+*.log
+tmp/
+*.tmp

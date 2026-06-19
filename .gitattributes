@@ -1,0 +1,28 @@
+# 改行コードを LF に正規化（macOS/Linux/Windows 混在対策）
+* text=auto eol=lf
+
+# 明示的にテキスト扱い
+*.swift   text
+*.h       text
+*.mm      text
+*.m       text
+*.md      text
+*.yml     text
+*.sh      text eol=lf
+*.plist   text
+*.gbnf    text
+*.entitlements text
+
+# バイナリ（差分を取らない）
+*.gguf    binary
+*.bin     binary
+*.a       binary
+*.dylib   binary
+*.png     binary
+*.tiff    binary
+*.icns    binary
+
+# GitHub の言語統計(linguist)で生成物・ドキュメントを除外
+*.gbnf            linguist-language=Text
+docs/*            linguist-documentation
+*.md              linguist-documentation

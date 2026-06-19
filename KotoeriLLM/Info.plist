@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>KotoeriLLM</string>
+    <key>CFBundleDisplayName</key>
+    <string>KotoeriLLM</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.kotoeri.inputmethod.KotoeriLLM</string>
+    <key>CFBundleVersion</key>
+    <string>0.1</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleExecutable</key>
+    <string>KotoeriLLM</string>
+    <key>CFBundleSignature</key>
+    <string>????</string>
+
+    <!-- 入力メソッドはバックグラウンドエージェントとして常駐する -->
+    <key>LSBackgroundOnly</key>
+    <true/>
+    <key>LSUIElement</key>
+    <true/>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+
+    <!-- main.swift の kConnectionName と一致させること -->
+    <key>InputMethodConnectionName</key>
+    <string>KotoeriLLM_1_Connection</string>
+
+    <!-- IMKServer が生成する IMKInputController サブクラス（@objc 名） -->
+    <key>InputMethodServerControllerClass</key>
+    <string>KotoeriInputController</string>
+
+    <!-- 取り扱う文字体系: 日本語 -->
+    <key>tsInputMethodCharacterRepertoireKey</key>
+    <array>
+        <string>Jpan</string>
+    </array>
+
+    <!-- 入力モード定義 -->
+    <key>ComponentInputModeDict</key>
+    <dict>
+        <key>tsInputModeListKey</key>
+        <dict>
+            <key>com.kotoeri.inputmethod.KotoeriLLM.Japanese</key>
+            <dict>
+                <key>TISInputSourceID</key>
+                <string>com.kotoeri.inputmethod.KotoeriLLM.Japanese</string>
+                <key>TISIntendedLanguage</key>
+                <string>ja</string>
+                <key>tsInputModeAlternateMenuTitleStringKey</key>
+                <string>KotoeriLLM ひらがな</string>
+                <key>tsInputModeCharacterRepertoireKey</key>
+                <array>
+                    <string>Jpan</string>
+                </array>
+                <key>tsInputModeIsVisibleKey</key>
+                <true/>
+                <key>tsInputModeKeyEquivalentKey</key>
+                <string></string>
+                <key>tsInputModeKeyEquivalentModifiersKey</key>
+                <integer>0</integer>
+                <key>tsInputModeMenuIconFileKey</key>
+                <string>menu_icon.tiff</string>
+                <key>tsInputModePaletteIconFileKey</key>
+                <string>menu_icon.tiff</string>
+                <key>tsInputModePrimaryInScriptKey</key>
+                <true/>
+                <key>tsInputModeScriptKey</key>
+                <string>smJapanese</string>
+            </dict>
+        </dict>
+        <key>tsVisibleInputModeOrderedArrayKey</key>
+        <array>
+            <string>com.kotoeri.inputmethod.KotoeriLLM.Japanese</string>
+        </array>
+    </dict>
+</dict>
+</plist>
