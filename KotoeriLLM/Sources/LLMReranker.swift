@@ -19,7 +19,9 @@ final class LLMReranker {
     private let bridge = LlamaBridge()
     private let queue = DispatchQueue(label: "com.kotoeri.llm.serial", qos: .userInitiated)
 
-    private(set) var isReady = false
+    // 背景ロードで書き、メインで読むためアトミックに（指摘4のデータ競合対策）。
+    private let _ready = AtomicBool(false)
+    var isReady: Bool { _ready.value }
 
     /// モデルを mmap でロード。重い処理。背景スレッドから呼ぶこと。
     @discardableResult
@@ -27,15 +29,17 @@ final class LLMReranker {
         let ok = bridge.loadModel(withPath: path,
                                   contextTokens: Int32(contextTokens),
                                   grammarPath: grammarPath)
-        isReady = ok
+        _ready.value = ok
         return ok
     }
 
     /// 候補を文脈で並べ替える。期限内に終わらなければ completion(nil)。
     /// completion は任意スレッドで呼ばれる。
+    /// isStale: 推論直前/直後に呼ばれ、true なら結果が既に不要（陳腐化）と判断して捨てる。
     func rerank(context: String,
                 candidates: [String],
                 deadline: TimeInterval,
+                isStale: @escaping () -> Bool = { false },
                 completion: @escaping ([String]?) -> Void) {
 
         guard isReady, !candidates.isEmpty else { completion(nil); return }
@@ -60,6 +64,10 @@ final class LLMReranker {
         }
 
         queue.async { [bridge] in
+            // ★陳腐化チェック: 推論を始める前に、結果がもう不要なら即捨てる。
+            //   速い入力でキューに積まれた古いリクエストの推論を走らせず、CPU/電池を節約。
+            if isStale() { finishOnce(nil); return }
+
             // GBNF で順位列を生成 → インデックス配列を取得。
             let order: [Int] = (bridge.rerankIndices(withContext: context,
                                                      candidates: candidates) as? [NSNumber])?
@@ -78,7 +86,8 @@ final class LLMReranker {
             for (i, c) in candidates.enumerated() where !seen.contains(i) {
                 reordered.append(c)
             }
-            finishOnce(reordered)
+            // 推論中に陳腐化していたら反映しない。
+            finishOnce(isStale() ? nil : reordered)
         }
     }
 }

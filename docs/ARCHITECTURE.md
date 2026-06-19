@@ -44,19 +44,35 @@ MozcClient.sendKey ──▶ MozcBridge(.mm) ──▶ mozc::client::Client.Send
 | 入力ログ非保存 | ログ出力に入力文字列/プロンプト/応答を含めない |
 | モデル単一実体 | `Settings.resolvedModelPath` = Application Support/models/＜1ファイル＞ |
 | mmap | `LlamaBridge`: `model_params.use_mmap = true`, `use_mlock=false` |
-| KV非永続 | セッション保存API不使用。毎リクエストで `llama_memory_clear` |
+| KV非永続 | セッション保存API不使用。文脈プレフィックスのKVはメモリ上で再利用するが、ディスクには書かない |
 | RAM節約 | `n_ctx` 既定2048、`maxCandidatesToLLM=9` でプロンプト短縮 |
 | バンドル軽量 | `.app` にモデルを同梱しない（数MB級） |
 
 ## リランキングのプロンプト/出力
-- 入力: 文脈末尾N字 + 番号付き候補（上位K=9）。
-- 出力: 並べ替えインデックス列のみ。`rerank.gbnf` で `[整数,整数,...]` に強制。
+- 入力: 文脈末尾N字（`llmContextChars`, 既定160）+ 番号付き候補（上位K=9）。
+- 出力: 並べ替えインデックス列のみ。`rerank.gbnf` で `[整数,整数,...]`（0〜999）に強制。
 - サンプリング: greedy（temp=0）で決定的。`temperature` 等のランダム要素は入れない。
 - 解析: `LlamaBridge.parseIndices:` が範囲内整数だけ採用。`LLMReranker` 側で重複除去・欠落補完。
 
+## 性能最適化（実装済み）
+- **KVプレフィックス再利用** (`LlamaBridge.rerankIndices`): プロンプトを不変プレフィックス
+  （命令+文脈）と可変サフィックス（候補+指示）に分割。手動 `llama_batch` で位置を明示制御し、
+  既存KVと新プレフィックスの共通長 `nCommon` を求め、`llama_memory_seq_rm(mem,0,nCommon,-1)` で
+  それ以降だけ破棄→差分のみ再デコード。同一composition中は文脈不変で全再利用となり、
+  毎キーの全文プレフィルを回避する。
+- **発火制御** (`InputController.handle`): 変換キー(Space)で各変換につき1回だけ `rerank` を発火
+  （`rerankedThisConversion` で連打を抑止）。ローマ字蓄積中は発火しない。
+- **陳腐化キャンセル** (`LLMReranker.rerank` の `isStale`): 世代カウンタ(`AtomicInt`)で、推論実行前に
+  既に不要な要求を捨てる。キューに積まれた古い推論を走らせずCPU/電池を節約。
+- **計測**: `KOTOERI_LLM_PROFILE=1` で prefill/gen/total(ms) と再利用率をログ（入力文字列は出さない）。
+
+## スレッド安全（補足）
+- `LLMReranker.isReady` と `InputController.generation` は `AtomicBool`/`AtomicInt`
+  （`OSAllocatedUnfairLock`）で保護。背景ロード・背景推論とメインスレッド間の競合を排除。
+
 ## 拡張ポイント（TODO）
 - `MozcBridge.fillKeyEvent:` を Mozc `mac/KeyCodeMap` 相当に拡張（JISかな・特殊キー網羅）。
-- `LlamaBridge.buildPrompt` を `llama_chat_apply_template` ベースに（モデル本来のテンプレ使用）。
+- プロンプトを `llama_chat_apply_template` ベースに（モデル本来のテンプレ使用）。
 - 追加候補生成（リランキングだけでなく、文脈に基づく新候補の少量補完）。
 - フィールド単位の文脈分離（現状はプロセス内グローバル1本）。
 - 設定UI（現状は `defaults` コマンド/UserDefaults 直接）。

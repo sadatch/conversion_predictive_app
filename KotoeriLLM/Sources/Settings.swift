@@ -14,6 +14,7 @@ final class Settings {
 
     private enum Key {
         static let contextCharLimit = "contextCharLimit"
+        static let llmContextChars   = "llmContextChars"
         static let llmEnabled       = "llmEnabled"
         static let llmDeadlineMs     = "llmDeadlineMs"
         static let llmContextTokens  = "llmContextTokens"
@@ -23,7 +24,8 @@ final class Settings {
 
     init() {
         defaults.register(defaults: [
-            Key.contextCharLimit: 500,
+            Key.contextCharLimit: 500,      // リングバッファ容量（保持する確定テキスト）。
+            Key.llmContextChars: 160,       // LLMへ渡す文脈末尾の文字数（プレフィル短縮・レイテンシ削減）。
             Key.llmEnabled: true,
             Key.llmDeadlineMs: 150,         // LLMハード期限(ms)。超過で並べ替えを破棄。
             Key.llmContextTokens: 2048,     // n_ctx。控えめに固定しKVキャッシュRAMを節約。
@@ -34,6 +36,9 @@ final class Settings {
 
     /// 直近コンテキストとして保持する最大文字数（リングバッファ容量）。
     var contextCharLimit: Int { defaults.integer(forKey: Key.contextCharLimit) }
+
+    /// LLMリランキングへ渡す文脈末尾の文字数（リングバッファ容量より短くしてレイテンシを抑える）。
+    var llmContextChars: Int { defaults.integer(forKey: Key.llmContextChars) }
 
     var llmEnabled: Bool { defaults.bool(forKey: Key.llmEnabled) }
 

@@ -81,7 +81,8 @@ Xcode でビルド後、リポジトリ直下で:
 
 | キー | 既定 | 説明 |
 |---|---|---|
-| `contextCharLimit` | 500 | 文脈リングバッファの文字数 |
+| `contextCharLimit` | 500 | 文脈リングバッファの保持文字数 |
+| `llmContextChars` | 160 | LLMへ渡す文脈末尾の文字数（短いほど低レイテンシ） |
 | `llmEnabled` | true | LLMリランキングの有効/無効 |
 | `llmDeadlineMs` | 150 | LLMハード期限(ms)。超過で並べ替え破棄 |
 | `llmContextTokens` | 2048 | n_ctx（KVキャッシュ節約のため控えめ） |
@@ -90,10 +91,32 @@ Xcode でビルド後、リポジトリ直下で:
 
 例: `defaults write com.kotoeri.inputmethod.KotoeriLLM llmDeadlineMs -int 120`
 
+## 性能チューニング（実機で効く）
+
+リランキングが「効く/効かない」は実機レイテンシ次第。以下を順に。
+
+1. **計測する**: 環境変数 `KOTOERI_LLM_PROFILE=1` を付けて起動すると、リランクごとに
+   `prefill / gen / total(ms)` と KV 再利用率をログ出力する（入力文字列は出さない）。
+   まず1リクエストの内訳を見る。
+2. **KVプレフィックス再利用**（実装済み, `LlamaBridge.mm`）: 命令+文脈の不変プレフィックスは
+   KVを使い回し、毎回のサフィックス（候補+指示）だけ再デコードする。同一composition中は
+   文脈が不変なので `reuse=nPrefix/nPrefix`（全再利用）になり、プレフィルが大幅短縮される。
+3. **発火を絞る**（実装済み, `InputController`）: 変換キー(Space)で各変換につき1回だけリランク。
+   ローマ字蓄積中やSpace連打（候補送り）では発火しない。陳腐化した推論は実行前に破棄。
+4. それでも期限超過が続くなら `llmDeadlineMs` を上げる／`llmContextChars`・`maxCandidatesToLLM`
+   を下げる／より小さいモデル（Qwen2.5-0.5B 等）に替える。
+
 ## 注意・既知の制限
 - これは **scaffold（骨組み）**。スタブで即ビルド可、実 Mozc/LLM 組み込みには上記段階2・3が必要。
 - `MozcBridge.mm` のキーマッピングは最小限。JISかな・特殊キー網羅は Mozc の KeyCodeMap 流用を推奨。
 - IMKCandidates のホットスワップは、ユーザーが候補選択を始める前のみ反映（体験を壊さないため）。
+- **段階2でのハマりどころ**: `USE_LLAMA=1` の静的リンク。`libllama`/`libggml*` はリンク順依存があり、
+  シンボル未解決が出たら `-lllama` を `-lggml*` より前に置く、`ggml-metal`/`ggml-blas` の有無を確認、
+  必要なら `-Wl,-force_load,<path>/libggml.a` を試す。`build_llama.sh` は `.a` を一括回収するため、
+  生成された lib 名を `project.yml` の `OTHER_LDFLAGS` に合わせること。
+- **リポジトリ名**: GitHub上は `conversion_predictive_app`、作業フォルダは `予測変換改造くん`、
+  プロダクト名は `KotoeriLLM` と表記が分かれている。実害はないが、READMEのツリー先頭や
+  バンドルID(`com.kotoeri...`)と揃えたい場合は適宜リネームを。
 
 ## ライセンスと GitHub 公開時の注意
 

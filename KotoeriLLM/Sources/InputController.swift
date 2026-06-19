@@ -29,10 +29,16 @@ final class KotoeriInputController: IMKInputController {
 
     // 現在表示中の候補（文字列の配列）。selectIndex で参照する。
     private var currentCandidates: [String] = []
-    // pipeline の世代カウンタ。古い非同期結果を破棄するために使う。
-    private var generation: Int = 0
+    // pipeline の世代カウンタ。古い/陳腐化した非同期結果を破棄するために使う。
+    // メインで更新、背景の陳腐化判定で読むためアトミック（指摘3,4）。
+    private let generation = AtomicInt(0)
+    // この変換セッションで既にリランク済みか（Space連打＝候補送りでの再発火を防ぐ）。
+    private var rerankedThisConversion = false
 
     private var services: AppServices { AppServices.shared }
+
+    // 変換トリガーとみなすキー（Space）。環境により「変換」キーのkeyCodeを足してよい。
+    private static let kVK_Space: UInt16 = 49
 
     // MARK: - Lifecycle
 
@@ -71,11 +77,21 @@ final class KotoeriInputController: IMKInputController {
         // 2) preedit（変換途中）を marked text として表示。
         updateMarkedText(result.preedit, cursor: result.preeditCursor, client: sender)
 
+        // 確定が起きたら変換セッションは終了 → 次の変換で再びリランク可能にする。
+        if result.committedText != nil { rerankedThisConversion = false }
+
         // 3) 候補表示。Mozc 候補を即時 → LLM 非同期並べ替え。
         if result.candidates.isEmpty {
             hideCandidates()
         } else {
-            presentCandidates(mozcCandidates: result.candidates, client: sender)
+            // 発火制御（指摘3）: 変換キー(Space)で、まだこの変換でリランクしていない時だけ発火。
+            // ローマ字蓄積中（予測候補が毎キー更新される）やSpace連打（候補送り）では発火させない。
+            let isConversionKey = (event.keyCode == Self.kVK_Space)
+            let allowRerank = isConversionKey && !rerankedThisConversion
+            presentCandidates(mozcCandidates: result.candidates,
+                              allowRerank: allowRerank,
+                              client: sender)
+            if allowRerank { rerankedThisConversion = true }
         }
 
         return true
@@ -83,29 +99,31 @@ final class KotoeriInputController: IMKInputController {
 
     // MARK: - Candidate pipeline (即時表示 + 非同期並べ替え)
 
-    private func presentCandidates(mozcCandidates: [String], client sender: Any!) {
-        generation &+= 1
-        let gen = generation
+    private func presentCandidates(mozcCandidates: [String], allowRerank: Bool, client sender: Any!) {
+        // 世代を進める（この時点で過去の非同期結果はすべて陳腐化）。
+        let gen = generation.increment()
 
-        // ① まず Mozc 順で即時表示（フォールバック兼初期描画）。
-        showCandidates(mozcCandidates)
+        // ① まず Mozc 順で即時表示（フォールバック兼初期描画）。show も行う。
+        showCandidates(mozcCandidates, reshow: true)
 
-        // LLM が無効/未ロードならここで終了（= 純 Mozc 動作）。
-        guard services.settings.llmEnabled, services.reranker.isReady else { return }
+        // 発火しない条件: 変換キー以外/リランク済み、LLM無効/未ロード。→ 純 Mozc 動作。
+        guard allowRerank, services.settings.llmEnabled, services.reranker.isReady else { return }
 
-        let contextTail = services.context.tail(services.settings.contextCharLimit)
+        // LLM へ渡す文脈は短い窓で十分（プレフィル短縮・レイテンシ削減）。
+        let contextTail = services.context.tail(services.settings.llmContextChars)
         let topK = Array(mozcCandidates.prefix(services.settings.maxCandidatesToLLM))
 
-        // ② 背景キューで期限付きリランキング。期限超過/失敗時は ① のまま。
+        // ② 背景キューで期限付きリランキング。期限超過/失敗/陳腐化時は ① のまま。
         services.reranker.rerank(
             context: contextTail,
             candidates: topK,
-            deadline: services.settings.llmDeadline
+            deadline: services.settings.llmDeadline,
+            isStale: { [weak self] in self?.generation.value != gen }
         ) { [weak self] reordered in
             guard let self = self else { return }
             DispatchQueue.main.async {
                 // 古い世代の結果、または既にユーザが候補選択を始めている場合は無視。
-                guard gen == self.generation else { return }
+                guard gen == self.generation.value else { return }
                 guard !self.userStartedSelecting else { return }
                 guard let reordered = reordered, !reordered.isEmpty else { return }
 
@@ -113,22 +131,27 @@ final class KotoeriInputController: IMKInputController {
                 let rest = mozcCandidates.dropFirst(topK.count)
                 let newList = reordered + rest
                 guard newList != self.currentCandidates else { return }
-                self.showCandidates(Array(newList))   // ホットスワップ
+                // ホットスワップは update() のみ（show を呼ばず、選択/スクロール位置のリセットを避ける＝指摘6）。
+                self.showCandidates(Array(newList), reshow: false)
             }
         }
     }
 
     private var userStartedSelecting = false
 
-    private func showCandidates(_ list: [String]) {
+    /// reshow=true: 初回表示（update + show）。reshow=false: 内容だけ差し替え（update のみ）。
+    private func showCandidates(_ list: [String], reshow: Bool) {
         currentCandidates = list
         candidatesWindow.update()      // データソース(candidates(_:))から再取得させる
-        candidatesWindow.show(kIMKLocateCandidatesBelowHint)
+        if reshow {
+            candidatesWindow.show(kIMKLocateCandidatesBelowHint)
+        }
     }
 
     private func hideCandidates() {
         currentCandidates = []
         userStartedSelecting = false
+        rerankedThisConversion = false
         candidatesWindow.hide()
     }
 

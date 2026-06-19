@@ -33,10 +33,42 @@ echo "↓ ダウンロード: ${MODEL_REPO}/${MODEL_FILE}"
 echo "  → ${DEST}"
 echo "  (リポジトリ/ファイル名が変わっている場合は MODEL_REPO / MODEL_FILE を指定してください)"
 
-# レジューム対応で取得。途中失敗しても部分ファイルを残さないよう一時名で。
 TMP="${DEST}.part"
+URLSTAMP="${DEST}.part.url"
+
+# 別URLの残骸 .part に -C - でレジュームすると壊れたファイルを掴むため、
+# URLが前回と異なる（or 記録が無い）場合は .part を破棄してからやり直す。
+if [[ -f "${TMP}" ]]; then
+  if [[ ! -f "${URLSTAMP}" ]] || [[ "$(cat "${URLSTAMP}" 2>/dev/null)" != "${URL}" ]]; then
+    echo "  ⚠ 既存の .part は別URL由来の可能性。破棄して取り直します。"
+    rm -f "${TMP}"
+  fi
+fi
+printf '%s' "${URL}" > "${URLSTAMP}"
+
+# 同一URLなら -C - でレジューム。失敗しても部分ファイルは .part のまま残す。
 curl -L --fail --retry 3 -C - -o "${TMP}" "${URL}"
+
+# サイズ健全性チェック（最低100MB。GGUFが途中で切れていないか粗く検証）。
+BYTES=$(stat -f%z "${TMP}" 2>/dev/null || stat -c%s "${TMP}" 2>/dev/null || echo 0)
+if [[ "${BYTES}" -lt 104857600 ]]; then
+  echo "✗ ダウンロードが小さすぎます(${BYTES} bytes)。中断とみなし .part を残します。" >&2
+  exit 1
+fi
+
+# 任意: EXPECTED_SHA256 が指定されていれば検証。
+if [[ -n "${EXPECTED_SHA256:-}" ]]; then
+  echo "  SHA256 を検証中..."
+  GOT=$(shasum -a 256 "${TMP}" | awk '{print $1}')
+  if [[ "${GOT}" != "${EXPECTED_SHA256}" ]]; then
+    echo "✗ SHA256 不一致: got ${GOT}" >&2
+    exit 1
+  fi
+  echo "  ✓ SHA256 一致"
+fi
+
 mv "${TMP}" "${DEST}"
+rm -f "${URLSTAMP}"
 
 echo "✓ 完了: ${DEST} ($(du -h "${DEST}" | cut -f1))"
 echo "  Settings の modelFileName と一致していることを確認してください: ${MODEL_FILE}"

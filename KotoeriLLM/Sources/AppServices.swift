@@ -15,7 +15,8 @@ final class AppServices {
     static let shared = AppServices()
 
     let settings = Settings()
-    let context = ContextBuffer(capacity: Settings().contextCharLimit)
+    // lazy にすることで settings を直接参照でき、使い捨て Settings() の二重生成を避ける（指摘5）。
+    lazy var context = ContextBuffer(capacity: settings.contextCharLimit)
     let mozc = MozcClient()
     let reranker = LLMReranker()
 
@@ -30,7 +31,8 @@ final class AppServices {
         guard !didBootstrap else { return }
         didBootstrap = true
 
-        context.capacity = settings.contextCharLimit
+        // context は lazy で settings.contextCharLimit を反映済み（明示初期化のため一度触る）。
+        _ = context
 
         // Mozc サーバへの接続確認（USE_MOZC=0 のスタブビルドでは常に false を返す）。
         let mozcOK = mozc.connect()
