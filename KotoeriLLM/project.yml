@@ -85,3 +85,12 @@ targets:
       # - sdk: Metal.framework
       # - sdk: MetalKit.framework
       # - sdk: Accelerate.framework
+
+# 共有スキームを生成（`xcodebuild -scheme KotoeriLLM` でCLIビルド/エラー確認できる）。
+schemes:
+  KotoeriLLM:
+    build:
+      targets:
+        KotoeriLLM: all
+    run:
+      config: Debug

@@ -13,10 +13,29 @@ set -euo pipefail
 
 APP="${1:-}"
 if [[ -z "${APP}" ]]; then
-  APP="$(find "${HOME}/Library/Developer/Xcode/DerivedData" -name "KotoeriLLM.app" -type d 2>/dev/null | head -n1 || true)"
+  # DerivedData から自動探索。
+  #  - Index.noindex 配下の「インデックス用の空スタブ」は除外（これを拾うと壊れたバンドルになる）。
+  #  - 実行ファイル Contents/MacOS/KotoeriLLM を持つ有効なバンドルだけを候補にする。
+  #  - 複数あれば最終更新が最新のものを選ぶ。
+  best=""; bestt=0
+  while IFS= read -r p; do
+    [[ -x "${p}/Contents/MacOS/KotoeriLLM" ]] || continue
+    t="$(stat -f %m "${p}" 2>/dev/null || echo 0)"
+    if [[ "${t}" -gt "${bestt}" ]]; then bestt="${t}"; best="${p}"; fi
+  done < <(find "${HOME}/Library/Developer/Xcode/DerivedData" -type d -name "KotoeriLLM.app" ! -path "*Index.noindex*" 2>/dev/null)
+  APP="${best}"
 fi
 if [[ -z "${APP}" || ! -d "${APP}" ]]; then
-  echo "✗ KotoeriLLM.app が見つかりません。先に Xcode でビルドするか、パスを引数で渡してください。" >&2
+  echo "✗ 有効な KotoeriLLM.app が見つかりません。" >&2
+  echo "  Xcode のビルドが成功しているか確認し（⌘B / エラーが無いこと）、" >&2
+  echo "  Product > Show Build Folder in Finder で .app の場所を確認してパスを引数に渡してください:" >&2
+  echo "    ./scripts/install.sh /path/to/Build/Products/Debug/KotoeriLLM.app" >&2
+  exit 1
+fi
+# 妥当性チェック（空スタブを掴んでいないか）。
+if [[ ! -x "${APP}/Contents/MacOS/KotoeriLLM" || ! -f "${APP}/Contents/Info.plist" ]]; then
+  echo "✗ 選ばれたバンドルが不完全です: ${APP}" >&2
+  echo "  実行ファイル/Info.plist が見当たりません。ビルドが本当に成功したか確認してください。" >&2
   exit 1
 fi
 

@@ -23,8 +23,9 @@ final class KotoeriInputController: IMKInputController {
 
     // 候補ウィンドウ（プロセス共有でも可だが、選択コールバックの取り回しのため
     // コントローラごとに保持し、表示時にこのインスタンスをデリゲートにする）。
+    // 注: `server` 単独だと IMKInputController 継承の server() メソッドと衝突するため self.server() を呼ぶ。
     private lazy var candidatesWindow: IMKCandidates = {
-        IMKCandidates(server: server, panelType: kIMKSingleColumnScrollingCandidatePanel)
+        IMKCandidates(server: self.server(), panelType: kIMKSingleColumnScrollingCandidatePanel)
     }()
 
     // 現在表示中の候補（文字列の配列）。selectIndex で参照する。
@@ -189,13 +190,20 @@ final class KotoeriInputController: IMKInputController {
         hideCandidates()
     }
 
+    // 送信元(sender)優先で IMKTextInput を取り出す。client() は (IMKTextInput & NSObjectProtocol)? を
+    // 返すので、そのまま upcast して返す（冗長な as? ダウンキャスト警告を回避）。
+    private func textInput(_ sender: Any!) -> IMKTextInput? {
+        if let s = sender as? IMKTextInput { return s }
+        return client()
+    }
+
     private func insertText(_ text: String, client sender: Any!) {
-        guard let c = sender as? IMKTextInput ?? client() as? IMKTextInput else { return }
+        guard let c = textInput(sender) else { return }
         c.insertText(text, replacementRange: NSRange(location: NSNotFound, length: 0))
     }
 
     private func updateMarkedText(_ preedit: String, cursor: Int, client sender: Any!) {
-        guard let c = sender as? IMKTextInput ?? client() as? IMKTextInput else { return }
+        guard let c = textInput(sender) else { return }
         if preedit.isEmpty {
             c.setMarkedText("", selectionRange: NSRange(location: 0, length: 0),
                             replacementRange: NSRange(location: NSNotFound, length: 0))

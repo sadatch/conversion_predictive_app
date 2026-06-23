@@ -39,7 +39,7 @@ final class MozcClient {
             committedText: r.committedText,
             preedit: r.preedit,
             preeditCursor: r.preeditCursor,
-            candidates: r.candidates as? [String] ?? []
+            candidates: r.candidates   // ブリッジ側で NSArray<NSString*>(nonnull) → [String]
         )
     }
 

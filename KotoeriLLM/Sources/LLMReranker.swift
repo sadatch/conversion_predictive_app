@@ -68,10 +68,9 @@ final class LLMReranker {
             //   速い入力でキューに積まれた古いリクエストの推論を走らせず、CPU/電池を節約。
             if isStale() { finishOnce(nil); return }
 
-            // GBNF で順位列を生成 → インデックス配列を取得。
-            let order: [Int] = (bridge.rerankIndices(withContext: context,
-                                                     candidates: candidates) as? [NSNumber])?
-                .map { $0.intValue } ?? []
+            // GBNF で順位列を生成 → インデックス配列を取得（戻り値は [NSNumber] 非Optional）。
+            let order: [Int] = bridge.rerankIndices(withContext: context,
+                                                    candidates: candidates).map { $0.intValue }
 
             guard !order.isEmpty else { finishOnce(nil); return }
 
